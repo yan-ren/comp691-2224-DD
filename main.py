@@ -1,6 +1,5 @@
 import random
 import time
-
 import networkx as nx
 from matplotlib import pyplot as plt
 import json
@@ -54,28 +53,33 @@ def first_fit(graph, node, color_dict):
     nx.set_node_attributes(graph, {node: color}, 'color')
 
 
-def plot_graph(graph, inductive, show_figure=False, save_figure=False):
+def plot_graph(graph, inductive):
     # Create a list of node colors that match the order of the nodes in the graph
     node_colors = [graph.nodes[n]['color'] for n in graph.nodes()]
     # Draw the graph with the node colors based on the color labels
     nx.draw(graph, node_color=node_colors, with_labels=True)
-    if save_figure:
-        plt.savefig(f'./plots/{len(graph.nodes())}_nodes_{inductive}_inductive.png')
-    # Show the plot
-    if show_figure:
-        plt.show()
+    plt.savefig(f'./plots/{len(graph.nodes())}_nodes_{inductive}_inductive.png')
+    plt.clf()
 
 
-def print_statistic(graph):
+def print_statistic(graph, d):
     node_colors = [graph.nodes[n]['color'] for n in graph.nodes()]
     color_number = len(set(node_colors))
-    print(f'Number of nodes: {len(graph.nodes())}, Number of color: {color_number}')
+    print(f'Number of nodes: {len(graph.nodes())}, {d}-inductive, Number of color: {color_number}')
 
     return color_number
 
 
-def run_simulation(inductive, node_number, color_dict):
+def run_simulation(inductive, node_number, color_dict, step_plot=False, plot_name=""):
     graph, node_index = init_graph(node_number)
+    figsize = (4, 3)
+    if step_plot:
+        fig, ax = plt.subplots(figsize=figsize)
+        pos = nx.spring_layout(graph)  # calculate the node positions
+        nx.draw(graph, pos, with_labels=True, font_weight='bold',
+                node_color=[color_dict[graph.nodes[i]['color']] for i in graph.nodes()], ax=ax)  # draw the graph
+        ax.set_title(f"Step {node_number - node_index}")  # set the title of the plot
+        plt.savefig(f"{plot_name}_{node_number - node_index}.png")
 
     while node_index > 0:
         # Adversary input
@@ -94,29 +98,39 @@ def run_simulation(inductive, node_number, color_dict):
         first_fit(graph, node_index, color_dict)
         node_index -= 1
 
+        if step_plot:
+            fig, ax = plt.subplots(figsize=figsize)
+            pos = nx.spring_layout(graph)  # calculate the node positions
+            nx.draw(graph, pos, with_labels=True, font_weight='bold',
+                    node_color=[color_dict[graph.nodes[i]['color']] for i in graph.nodes()], ax=ax)  # draw the graph
+            ax.set_title(f"Step {node_number - node_index}")  # set the title of the plot
+            plt.savefig(f"{plot_name}_{node_number - node_index}.png")
+
     return graph
 
 
 def sample_experiment(color_dict):
     node_index = 10
     d = 2
-    graph = run_simulation(d, node_index, color_dict)
-    print_statistic(graph)
-    plot_graph(graph, d, save_figure=True)
+    graph = run_simulation(d, node_index, color_dict, step_plot=True, plot_name="./plots/10_nodes_2_inductive")
+    print_statistic(graph, d)
 
 
 def experiment1(color_dict):
+    plt.clf()
     d = 5
     colors = []
-    start = 1000
-    end = 100001
-    step = 1000
+    start = 100
+    end = 10001
+    step = 100
     times = []
     total_start_time = time.time()
     for node_number in range(start, end, step):
         start_time = time.time()
         graph = run_simulation(d, node_number, color_dict)
-        color_stats = print_statistic(graph)
+        # if node_number == start:
+        #     plot_graph(graph, d)
+        color_stats = print_statistic(graph, d)
         colors.append(color_stats)  # append the number of unique colors
         end_time = time.time()
         times.append(end_time - start_time)
@@ -125,14 +139,14 @@ def experiment1(color_dict):
 
     # plot node_number vs number of unique colors
     plt.figure(1)
-    plt.plot(range(start, end, step), colors)
+    plt.plot(list(range(start, end, step)), colors)
     plt.xlabel('Node number')
     plt.ylabel('Number of colors')
     plt.title('Experiment 1')
 
     # plot node_number vs elapsed time
     plt.figure(2)
-    plt.plot(range(start, end, step), times)
+    plt.plot(list(range(start, end, step)), times)
     plt.xlabel('Node number')
     plt.ylabel('Elapsed time (seconds)')
     plt.title('Experiment 1')
@@ -142,14 +156,55 @@ def experiment1(color_dict):
     plt.figure(2).savefig('./plots/experiment1_time_plot.png')
 
 
+def experiment2(color_dict):
+    plt.clf()
+    d = 500
+    node_number = 1000
+    colors = []
+    times = []
+    total_start_time = time.time()
+    for inductive in range(2, d):
+        start_time = time.time()
+        graph = run_simulation(inductive, node_number, color_dict)
+        # if node_number == start:
+        #     plot_graph(graph, d)
+        color_stats = print_statistic(graph, inductive)
+        colors.append(color_stats)  # append the number of unique colors
+        end_time = time.time()
+        times.append(end_time - start_time)
+    total_end_time = time.time()
+    print('Elapsed times:', total_end_time - total_start_time)
+
+    # plot inductive vs number of unique colors
+    plt.figure(1)
+    plt.plot(list(range(2, d)), colors)
+    plt.xlabel('d-inductive')
+    plt.ylabel('Number of colors')
+    plt.title('Experiment 2')
+
+    # plot inductive vs elapsed time
+    plt.figure(2)
+    plt.plot(list(range(2, d)), times)
+    plt.xlabel('d-inductive')
+    plt.ylabel('Elapsed time (seconds)')
+    plt.title('Experiment 2')
+
+    # save the plots as PNG files
+    plt.figure(1).savefig('./plots/experiment2_color_plot.png')
+    plt.figure(2).savefig('./plots/experiment2_time_plot.png')
+
+
 def main():
     color_dict = init_color_dict()
 
     # run with ten nodes, 2-inductive graph for correctness checking
-    sample_experiment(color_dict)
+    # sample_experiment(color_dict)
 
-    # 2-inductive graph, with nodes 10, 20, ...  1000
+    # 5-inductive graph, with nodes 10, 20, ...  1000
     # experiment1(color_dict)
+
+    # 100 nodes, inductive from 2...100
+    experiment2(color_dict)
 
 
 if __name__ == "__main__":
