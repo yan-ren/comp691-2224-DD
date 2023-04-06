@@ -1,11 +1,63 @@
 import random
 import time
-import networkx as nx
 from matplotlib import pyplot as plt
 import json
 
 
-# Define a function to parse key-value pairs with integer keys
+class Graph:
+    def __init__(self, color_dict):
+        self.graph = {}
+        self.color_dict = color_dict
+
+    def add_vertex(self, vertex, color=-1):
+        if vertex not in self.graph:
+            self.graph[vertex] = {'color': color, 'neighbors': set()}
+
+    def add_edge(self, v1, v2):
+        self.add_vertex(v1)
+        self.add_vertex(v2)
+        self.graph[v1]['neighbors'].add(v2)
+        self.graph[v2]['neighbors'].add(v1)
+
+    def get_vertices(self):
+        return list(self.graph.keys())
+
+    def get_edges(self):
+        edges = []
+        for v in self.graph:
+            for neighbor in self.graph[v]['neighbors']:
+                if (v, neighbor) not in edges and (neighbor, v) not in edges:
+                    edges.append((v, neighbor))
+        return edges
+
+    def get_vertex_color(self, vertex):
+        return self.graph[vertex]['color']
+
+    def get_vertex_color_code(self, vertex):
+        return self.color_dict[self.graph[vertex]['color']]
+
+    def get_neighbors(self, vertex):
+        return list(self.graph[vertex]['neighbors'])
+
+    def get_vertex(self, vertex):
+        return self.graph.get(vertex)
+
+    def set_vertex_color(self, vertex, color):
+        vertex_attrs = self.get_vertex(vertex)
+        if vertex_attrs is not None:
+            vertex_attrs['color'] = color
+        else:
+            print(f"Vertex {vertex} not found in graph.")
+
+    def get_unique_colors(self):
+        unique_colors = set()
+        for vertex in self.graph:
+            vertex_attrs = self.get_vertex(vertex)
+            if vertex_attrs is not None and 'color' in vertex_attrs:
+                unique_colors.add(vertex_attrs['color'])
+        return list(unique_colors)
+
+
 def parse_int_keys(pairs):
     return {int(key): value for key, value in pairs}
 
@@ -18,11 +70,11 @@ def init_color_dict():
     return color_dict
 
 
-def init_graph(node_index):
+def init_graph(node_index, color_dict):
     # Create an empty undirected graph
-    graph = nx.Graph()
+    graph = Graph(color_dict)
     # Add the first node to the graph
-    graph.add_node(node_index, color=0)
+    graph.add_vertex(node_index, color=0)
     node_index -= 1
 
     return graph, node_index
@@ -39,56 +91,39 @@ def find_min_color(color_list, color_dict):
 
 def first_fit(graph, node, color_dict):
     # Get all neighbors of node
-    neighbors = list(graph.neighbors(node))
+    neighbors = list(graph.get_neighbors(node))
 
     color_list = []
     # Check the color label of each neighboring node
     for neighbor in neighbors:
-        if 'color' in graph.nodes[neighbor]:
-            color = graph.nodes[neighbor]['color']
-            color_list.append(color)
+        color = graph.get_vertex_color(neighbor)
+        color_list.append(color)
 
     # Find lowest-numbered color
     color = find_min_color(color_list, color_dict)
-    nx.set_node_attributes(graph, {node: color}, 'color')
-
-
-def plot_graph(graph, inductive):
-    # Create a list of node colors that match the order of the nodes in the graph
-    node_colors = [graph.nodes[n]['color'] for n in graph.nodes()]
-    # Draw the graph with the node colors based on the color labels
-    nx.draw(graph, node_color=node_colors, with_labels=True)
-    plt.savefig(f'./plots/{len(graph.nodes())}_nodes_{inductive}_inductive.png')
-    plt.clf()
+    graph.set_vertex_color(node, color)
 
 
 def print_statistic(graph, d):
-    node_colors = [graph.nodes[n]['color'] for n in graph.nodes()]
-    color_number = len(set(node_colors))
-    print(f'Number of nodes: {len(graph.nodes())}, {d}-inductive, Number of color: {color_number}')
+    color_number = len(graph.get_unique_colors())
+    print(f'Number of nodes: {len(graph.get_vertices())}, {d}-inductive, Number of color: {color_number}')
 
     return color_number
 
 
 def run_simulation(inductive, node_number, color_dict, step_plot=False, plot_name=""):
-    graph, node_index = init_graph(node_number)
-    figsize = (4, 3)
+    graph, node_index = init_graph(node_number, color_dict)
     if step_plot:
-        fig, ax = plt.subplots(figsize=figsize)
-        pos = nx.spring_layout(graph)  # calculate the node positions
-        nx.draw(graph, pos, with_labels=True, font_weight='bold',
-                node_color=[color_dict[graph.nodes[i]['color']] for i in graph.nodes()], ax=ax)  # draw the graph
-        ax.set_title(f"Step {node_number - node_index}")  # set the title of the plot
-        plt.savefig(f"{plot_name}_{node_number - node_index}.png")
+        print(f"Step {node_number - node_index}", graph.graph)
 
     while node_index > 0:
         # Adversary input
         # Add the new node to the graph with additional string attribute
-        graph.add_node(node_index)
+        graph.add_vertex(node_index)
         # Add d random edges to the new node
         for j in range(inductive):
             # Choose a random node from the existing nodes
-            nodes = list(graph.nodes())
+            nodes = list(graph.get_vertices())
             nodes.remove(node_index)
             node = random.choice(nodes)
             # Add an undirected edge between the new node and the existing node
@@ -99,12 +134,7 @@ def run_simulation(inductive, node_number, color_dict, step_plot=False, plot_nam
         node_index -= 1
 
         if step_plot:
-            fig, ax = plt.subplots(figsize=figsize)
-            pos = nx.spring_layout(graph)  # calculate the node positions
-            nx.draw(graph, pos, with_labels=True, font_weight='bold',
-                    node_color=[color_dict[graph.nodes[i]['color']] for i in graph.nodes()], ax=ax)  # draw the graph
-            ax.set_title(f"Step {node_number - node_index}")  # set the title of the plot
-            plt.savefig(f"{plot_name}_{node_number - node_index}.png")
+            print(f"Step {node_number - node_index}", graph.graph)
 
     return graph
 
@@ -221,16 +251,20 @@ def experiment3(color_dict):
 def main():
     color_dict = init_color_dict()
 
-    # run with ten nodes, 2-inductive graph for correctness checking
+    # run with 10 nodes, 2-inductive graph for correctness checking
+    print("sample_experiment: run with 10 nodes, 2-inductive graph for correctness checking")
     sample_experiment(color_dict)
 
-    # 5-inductive graph, with nodes 10, 20, ...  1000
+    # 5-inductive graph, with nodes 10, 20, ...  10000
+    print("experiment1: 5-inductive graph, with nodes 10, 20, ...  10000")
     experiment1(color_dict)
 
-    # 100 nodes, inductive from 2...100
+    # 1000 nodes, inductive from 2...500
+    print("experiment2: 1000 nodes, inductive from 2...500")
     experiment2(color_dict)
 
     # 100 nodes, 1000 nodes, 2000 nodes run on inductive from 1 to 80
+    print("experiment3: 100 nodes, 1000 nodes, 2000 nodes run on inductive from 1 to 80")
     experiment3(color_dict)
 
 
